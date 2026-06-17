@@ -1,0 +1,72 @@
+# AI简历优化器 - CI流水线
+# push 和 pull_request 时自动运行
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Python 语法检查
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 语法检查（ast.parse）
+        run: |
+          python -c "
+          import ast, sys, os
+          files = ['app.py', 'ai_client.py', 'pdf_parser.py', 'rag_engine.py']
+          errors = []
+          for f in files:
+              if os.path.exists(f):
+                  try:
+                      with open(f, 'r', encoding='utf-8') as fh:
+                          ast.parse(fh.read())
+                      print(f'OK: {f}')
+                  except SyntaxError as e:
+                      errors.append(f'{f}: {e}')
+          if errors:
+              for e in errors:
+                  print(f'ERROR: {e}')
+              sys.exit(1)
+          print('All syntax checks passed')
+          "
+
+  docker:
+    name: Docker 构建
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 构建 Docker 镜像
+        run: docker build -t resume-optimizer .
+
+      - name: 测试启动
+        run: |
+          docker run -d --name test-app \
+            -e DEEPSEEK_API_KEY=sk-test \
+            -p 8501:8501 \
+            resume-optimizer
+          sleep 10
+          docker ps | grep test-app
+          echo "Docker build and start successful"
+          docker stop test-app
+          docker rm test-app
