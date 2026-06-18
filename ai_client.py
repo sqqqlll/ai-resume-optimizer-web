@@ -8,30 +8,33 @@ import os
 import time
 from pathlib import Path
 from openai import OpenAI
-from dotenv import load_dotenv
 
-# 确保加载同目录下的 .env 文件，不依赖 CWD
-load_dotenv(dotenv_path=Path(__file__).parent / ".env")
+# 尝试加载 .env（本地开发用），不影响已设置的环境变量
+_env_path = Path(__file__).parent / ".env"
+if _env_path.exists():
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path=_env_path)
 
-# 获取 API Key：本地环境变量 -> Streamlit Cloud secrets
-api_key = os.getenv("DEEPSEEK_API_KEY")
-if not api_key:
+def _get_api_key() -> str:
+    """获取 API Key，按优先级：环境变量 > st.secrets（Streamlit Cloud）"""
+    key = os.environ.get("DEEPSEEK_API_KEY")
+    if key:
+        return key
+    # Streamlit Cloud 的 secrets 也加载到环境变量中，兜底直接读
     try:
         import streamlit as st
-        api_key = st.secrets.get("DEEPSEEK_API_KEY")
+        if hasattr(st, "secrets") and "DEEPSEEK_API_KEY" in st.secrets:
+            return st.secrets["DEEPSEEK_API_KEY"]
     except Exception:
         pass
-
-if not api_key:
     raise ValueError(
-        "未找到 DEEPSEEK_API_KEY。\n"
-        "本地开发：在 .env 文件中设置 DEEPSEEK_API_KEY=your_key\n"
-        "Streamlit Cloud：在 Secrets 中设置 DEEPSEEK_API_KEY = \"your_key\""
+        "未找到 DEEPSEEK_API_KEY\n"
+        "请在 Streamlit Cloud 的 Secrets 中设置（重启应用后生效）\n"
+        '格式: DEEPSEEK_API_KEY = "your_api_key_here"'
     )
 
-# DeepSeek 兼容 OpenAI 接口
 client = OpenAI(
-    api_key=api_key,
+    api_key=_get_api_key(),
     base_url="https://api.deepseek.com/v1"
 )
 
