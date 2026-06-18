@@ -1,6 +1,7 @@
 """
 DeepSeek API 调用模块
 复用Chrome插件中已有的Prompt模板
+支持本地开发（.env）和 Streamlit Cloud（st.secrets）两种方式获取API Key
 """
 
 import os
@@ -12,9 +13,25 @@ from dotenv import load_dotenv
 # 确保加载同目录下的 .env 文件，不依赖 CWD
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
+# 获取 API Key：本地环境变量 -> Streamlit Cloud secrets
+api_key = os.getenv("DEEPSEEK_API_KEY")
+if not api_key:
+    try:
+        import streamlit as st
+        api_key = st.secrets.get("DEEPSEEK_API_KEY")
+    except Exception:
+        pass
+
+if not api_key:
+    raise ValueError(
+        "未找到 DEEPSEEK_API_KEY。\n"
+        "本地开发：在 .env 文件中设置 DEEPSEEK_API_KEY=your_key\n"
+        "Streamlit Cloud：在 Secrets 中设置 DEEPSEEK_API_KEY = \"your_key\""
+    )
+
 # DeepSeek 兼容 OpenAI 接口
 client = OpenAI(
-    api_key=os.getenv("DEEPSEEK_API_KEY"),
+    api_key=api_key,
     base_url="https://api.deepseek.com/v1"
 )
 
