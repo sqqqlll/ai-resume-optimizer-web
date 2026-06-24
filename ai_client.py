@@ -33,10 +33,18 @@ def _get_api_key() -> str:
         '格式: DEEPSEEK_API_KEY = "your_api_key_here"'
     )
 
-client = OpenAI(
-    api_key=_get_api_key(),
-    base_url="https://api.deepseek.com/v1"
-)
+_client = None
+
+
+def _get_client() -> OpenAI:
+    """延迟初始化 OpenAI 客户端（避免 Streamlit Cloud 导入时 Secrets 未就绪）"""
+    global _client
+    if _client is None:
+        _client = OpenAI(
+            api_key=_get_api_key(),
+            base_url="https://api.deepseek.com/v1"
+        )
+    return _client
 
 
 # 成本统计（累计，用函数访问避免Streamlit缓存问题）
@@ -64,7 +72,7 @@ def call_deepseek(
 
     for attempt in range(MAX_RETRIES):
         try:
-            response = client.chat.completions.create(
+            response = _get_client().chat.completions.create(
                 model="deepseek-chat",
                 messages=[
                     {"role": "system", "content": system_prompt},
