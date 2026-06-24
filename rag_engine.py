@@ -18,10 +18,19 @@ import os
 from pathlib import Path
 from typing import List, Optional
 
-from langchain_chroma import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.documents import Document
+_RAG_AVAILABLE = False
+try:
+    from langchain_chroma import Chroma
+    from langchain_huggingface import HuggingFaceEmbeddings
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    from langchain_core.documents import Document
+    _RAG_AVAILABLE = True
+except Exception:
+    Chroma = None
+    HuggingFaceEmbeddings = None
+    RecursiveCharacterTextSplitter = None
+    Document = None
+    # RAG 不可用时，知识库降级为空
 
 # 知识库持久化目录
 CHROMA_PERSIST_DIR = str(Path(__file__).parent / "chroma_db")
@@ -213,6 +222,11 @@ class ResumeKnowledgeBase:
     """简历知识库 - 基于Chroma的向量检索"""
 
     def __init__(self):
+        if not _RAG_AVAILABLE:
+            # RAG 依赖不可用，降级为空知识库
+            self.vector_store = None
+            self.text_splitter = None
+            return
         self.embeddings = HuggingFaceEmbeddings(
             model_name="BAAI/bge-small-zh-v1.5",
             model_kwargs={"device": "cpu"},
@@ -227,6 +241,8 @@ class ResumeKnowledgeBase:
 
     def _load_or_create(self):
         """加载已有向量库，不存在则创建"""
+        if not _RAG_AVAILABLE:
+            return None
         try:
             if os.path.exists(CHROMA_PERSIST_DIR) and os.listdir(CHROMA_PERSIST_DIR):
                 return Chroma(
@@ -239,6 +255,8 @@ class ResumeKnowledgeBase:
 
     def _build_knowledge_base(self):
         """用预置知识库数据构建向量库"""
+        if not _RAG_AVAILABLE:
+            return None
         docs = []
         for item in KNOWLEDGE_BASE:
             doc = Document(
@@ -257,17 +275,16 @@ class ResumeKnowledgeBase:
         )
         return vector_store
 
-    def search(self, query: str, k: int = 3) -> List[Document]:
-        """
-        MMR检索，保证结果多样性
-        MMR = 既相关又不重复
-        """
+    def search(self, query: str, k: int = 3) -> List:
+        """MMR检索"""
+        if not _RAG_AVAILABLE or self.vector_store is None:
+            return []
         try:
             results = self.vector_store.max_marginal_relevance_search(
                 query, k=k, fetch_k=15
             )
             return results
-        except Exception as e:
+        except Exception:
             return []
 
     def get_context(self, query: str, k: int = 3) -> str:
@@ -282,6 +299,8 @@ class ResumeKnowledgeBase:
     @property
     def count(self) -> int:
         """知识库中的文档块总数"""
+        if not _RAG_AVAILABLE or self.vector_store is None:
+            return 0
         try:
             return len(self.vector_store.get()["ids"])
         except Exception:
@@ -289,6 +308,8 @@ class ResumeKnowledgeBase:
 
     def add_document(self, content: str, metadata: Optional[dict] = None):
         """向知识库添加新文档"""
+        if not _RAG_AVAILABLE or self.vector_store is None:
+            return
         if metadata is None:
             metadata = {"category": "用户上传", "tag": "自定义"}
         doc = Document(page_content=content, metadata=metadata)
@@ -296,6 +317,8 @@ class ResumeKnowledgeBase:
 
     def rebuild(self):
         """重建知识库（用于调试）"""
+        if not _RAG_AVAILABLE:
+            return
         import shutil
         if os.path.exists(CHROMA_PERSIST_DIR):
             shutil.rmtree(CHROMA_PERSIST_DIR)
