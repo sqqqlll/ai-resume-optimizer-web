@@ -16,21 +16,21 @@ if _env_path.exists():
     load_dotenv(dotenv_path=_env_path)
 
 def _get_api_key() -> str:
-    """获取 API Key，按优先级：环境变量 > st.secrets（Streamlit Cloud）"""
+    """获取 API Key"""
+    # 1. 环境变量（本地开发用）
     key = os.environ.get("DEEPSEEK_API_KEY")
     if key:
         return key
-    # Streamlit Cloud 的 secrets 也加载到环境变量中，兜底直接读
+    # 2. st.secrets（Streamlit Cloud 用）
     try:
         import streamlit as st
-        if hasattr(st, "secrets") and "DEEPSEEK_API_KEY" in st.secrets:
-            return st.secrets["DEEPSEEK_API_KEY"]
+        return st.secrets["DEEPSEEK_API_KEY"]
     except Exception:
         pass
     raise ValueError(
         "未找到 DEEPSEEK_API_KEY\n"
         "请在 Streamlit Cloud 的 Secrets 中设置（重启应用后生效）\n"
-        '格式: DEEPSEEK_API_KEY = "your_api_key_here"'
+        '格式: DEEPSEEK_API_KEY = "sk-your-key-here"'
     )
 
 _client = None
